@@ -1,0 +1,2 @@
+# Private machine-specific config and ephemeral secrets
+.local/
