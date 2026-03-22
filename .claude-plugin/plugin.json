@@ -1,0 +1,9 @@
+{
+  "name": "skills-guru",
+  "description": "Expert skill manager for Claude Code — install, scope, sync, and curate skills with secure config handling",
+  "version": "1.0.0",
+  "author": {
+    "name": "James Burton"
+  },
+  "keywords": ["skills", "manager", "install", "sync", "security"]
+}
