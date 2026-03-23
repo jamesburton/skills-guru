@@ -103,11 +103,11 @@ git rev-parse --show-toplevel  # get repo root
 Include both Claude Code and Docker Agent paths in the scope map:
 
 ```
-[docker-agent] User-global:  ~/.agents/skills/
 [docker-agent] User-global:  ~/.codex/skills/
+[docker-agent] User-global:  ~/.agents/skills/
 [shared]       User-global:  ~/.claude/skills/
-[docker-agent] Project:      <repo>/.agents/skills/
-[shared]       Project:      <repo>/.claude/skills/
+[docker-agent] Project:      <each-dir-from-git-root-to-cwd>/.agents/skills/
+[shared]       Project:      <cwd>/.claude/skills/
 ```
 
 Mark each entry with its agent type (`docker-agent`, `claude-code`, or `shared`).
@@ -124,7 +124,7 @@ Copies a skill from a Claude Code location to a Docker Agent location. The skill
 2. Determine target path: `~/.agents/skills/<name>/` or `<repo>/.agents/skills/<name>/`.
 3. Conflict check at target (see Conflict Handling in scope-guide.md).
 4. Copy all files.
-5. **Adapt frontmatter** if `description` starts with "Use when..." — offer to keep as-is or shorten for Docker Agent convention (Docker Agent has no such requirement; keeping it is safe).
+5. **Adapt frontmatter** only for Docker Agent–specific fields; copy `description` as-is (even if it starts with "Use when...", Docker Agent has no such requirement and keeping the text is safe).
 6. Verify copy.
 7. Report: "Copied `<name>` to Docker Agent scope at `<target-path>`."
 

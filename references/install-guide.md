@@ -38,15 +38,17 @@ Returns a type token: `local-md`, `local-dir`, `local-archive`, `github-repo`,
 
 ### Step 3: Validate Skill Structure
 ```
-node scripts/install-skill.cjs validateSkill <temp-dir>
+node scripts/install-skill.cjs validateSkill <temp-dir> [--source-path <original-path>]
 ```
 Checks:
-- `SKILL.md` present
+- `SKILL.md` present in `<temp-dir>`
 - Frontmatter block exists (`---` delimiters)
 - Required keys present: `name`, `description`
 - `version` is not required in SKILL.md frontmatter — skills-guru records install version in `memory/sources.md`. Docker Agent skills may store a display version in `metadata.version` (preserved as-is; not validated)
 
-**Docker Agent skills** (sourced from `.agents/skills/` or `~/.agents/skills/`) are allowed additional frontmatter fields without warnings: `context`, `allowed-tools`, `license`, `compatibility`, `metadata`. See `references/docker-agent-guide.md` for validation rules specific to Docker Agent format.
+The optional `--source-path` flag passes the original source location (e.g. `~/.agents/skills/foo`) for Docker Agent detection. When the source path contains `.agents/skills`, the validator applies relaxed rules (see below).
+
+**Docker Agent skills** (sourced from `.agents/skills/` or `~/.agents/skills/`) are detected automatically — either via `--source-path` or by detecting the pattern in `<temp-dir>` itself. Docker Agent–specific frontmatter fields (`context`, `allowed-tools`, `license`, `compatibility`, `metadata`) are reported as Info rather than warnings. See `references/docker-agent-guide.md` for validation rules specific to Docker Agent format.
 
 ### Step 4: Security Scan
 
@@ -117,7 +119,7 @@ Run automatically after copy. Issues displayed with suggested fixes.
 |-------|------|----------|
 | Frontmatter parses | Valid YAML between `---` delimiters | Error |
 | Name format | Kebab-case only: `[a-z0-9-]+` | Warning |
-| Description prefix | Starts with "Use when..." | Warning (Claude Code only; skipped for Docker Agent sources) |
+| Description prefix | Starts with "Use when..." | Warning (Claude Code only; demoted to Info for Docker Agent sources) |
 | File length | Under 500 lines | Warning (not blocking) |
 | Reference depth | No nested `references/` deeper than 1 level | Warning |
 | No @-file loads | No lines matching `@<path>` pattern | Error |
