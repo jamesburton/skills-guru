@@ -1,16 +1,28 @@
 # Scope Guide: Skill Location and Promotion
 
-Reference for `skills-guru` scope operations. Covers hierarchy, discovery, operations, conflict handling, and monorepo patterns.
+Reference for `skills-guru` scope operations. Covers hierarchy, discovery, operations, conflict handling, and monorepo patterns. For Docker Agent–specific paths and cross-agent operations, see `references/docker-agent-guide.md`.
 
 ---
 
 ## Scope Hierarchy
+
+### Claude Code scopes
 
 ```
 ~/.claude/skills/                          ← Level 0: User-global (available in all projects)
 <repo>/.claude/skills/                     ← Level 1: Repo root (this repo only)
 <repo>/src/.claude/skills/                 ← Level 2: Subfolder scoped
 <repo>/packages/api/.claude/skills/        ← Level 2+: Monorepo package scoped
+```
+
+### Docker Agent scopes (see docker-agent-guide.md for full details)
+
+```
+~/.codex/skills/                           ← User-global codex (recursive scan, lowest precedence)
+~/.claude/skills/                          ← Shared: flat-scanned by both Claude Code and Docker Agent
+~/.agents/skills/                          ← User-global (recursive scan, highest global precedence)
+<repo>/.claude/skills/                     ← Shared: project-level Claude Code and Docker Agent (flat, cwd only)
+<each-dir-from-root-to-cwd>/.agents/skills/ ← Project-level Docker Agent (flat per dir; closer to cwd wins)
 ```
 
 **Shadowing rule:** A skill at a lower (deeper) level shadows a same-named skill at a higher level. The deepest match wins at load time.

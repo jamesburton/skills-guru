@@ -32,6 +32,7 @@ Detect user intent and load the appropriate reference file:
 |----------------|---------------|--------|
 | install, add, URL/path given | `references/install-guide.md` | `scripts/install-skill.cjs` |
 | move, copy, promote, demote | `references/scope-guide.md` | file operations via Bash |
+| docker-agent, .agents/skills, cross-agent, agents skills | `references/docker-agent-guide.md` | file operations via Bash |
 | sync, update, reset, push, pr, fork | `references/sync-guide.md` | `scripts/git-sync.cjs` |
 | remember, catalog, trusted, sources, known tools | `references/memory-guide.md` | — |
 | audit, review rules, refine self | `references/refinement-guide.md` | — |

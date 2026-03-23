@@ -155,6 +155,35 @@ Use for database-related tasks.
 
 ---
 
+## Docker Agent Compatibility
+
+Skills in `~/.claude/skills/` are automatically discoverable by both Claude Code and Docker Agent (flat scan). Skills in `.agents/skills/` or `~/.agents/skills/` are Docker Agent–only.
+
+### Cross-Agent Authoring
+
+- The Claude Code `description: Use when...` convention is **not required** by Docker Agent. A description without that prefix is valid for Docker Agent and still works in Claude Code (downgraded to a Warning, not an Error).
+- Docker Agent supports additional frontmatter fields (`context`, `allowed-tools`, `license`, `compatibility`, `metadata`). These fields are **harmless** in Claude Code — unknown frontmatter keys are ignored.
+- The `context: fork` field is Docker Agent–specific. Claude Code does not support sub-agent context isolation; omit it when the skill is intended for Claude Code only.
+- For skills meant to work in both agents, place them in `~/.claude/skills/` or `<repo>/.claude/skills/` and avoid `context: fork`.
+
+### Enabling Skills in docker-agent
+
+Docker Agent requires both `skills: true` and a `filesystem` toolset in the agent config:
+
+```yaml
+agents:
+  root:
+    model: openai/gpt-4o
+    instruction: You are a helpful assistant.
+    skills: true
+    toolsets:
+      - type: filesystem   # required for reading skill files
+```
+
+Without `filesystem`, skill files cannot be read even if `skills: true` is set.
+
+---
+
 ## Anti-Patterns
 
 ### Kitchen Sink Skills
