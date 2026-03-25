@@ -14,6 +14,8 @@ const fs = require('fs');
 const {
   detectInputType,
   validateSkill,
+  isDockerAgentPath,
+  validateSkillDir,
 } = require('./install-skill.cjs');
 
 let passed = 0;
@@ -237,6 +239,106 @@ test('validateSkill returns valid, warnings, errors fields', () => {
   assertTrue('warnings' in result, 'missing warnings');
   assertTrue('errors' in result, 'missing errors');
 });
+
+// ─── isDockerAgentPath ────────────────────────────────────────────────────────
+
+console.log('\nisDockerAgentPath — detection:');
+
+test('~/.agents/skills/foo → true', () => {
+  assertTrue(isDockerAgentPath('/home/user/.agents/skills/foo'));
+});
+
+test('.agents/skills/foo (relative) → true', () => {
+  assertTrue(isDockerAgentPath('.agents/skills/foo'));
+});
+
+test('~/.claude/skills/foo → false', () => {
+  assertFalse(isDockerAgentPath('/home/user/.claude/skills/foo'));
+});
+
+test('empty string → false', () => {
+  assertFalse(isDockerAgentPath(''));
+});
+
+test('non-string → false', () => {
+  assertFalse(isDockerAgentPath(null));
+});
+
+// ─── validateSkillDir ─────────────────────────────────────────────────────────
+
+console.log('\nvalidateSkillDir — Claude Code source (default):');
+
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skills-guru-test-'));
+
+try {
+  // Good Claude Code skill
+  const claudeSkillDir = path.join(tmpDir, 'claude-skill');
+  fs.mkdirSync(claudeSkillDir);
+  fs.writeFileSync(path.join(claudeSkillDir, 'SKILL.md'),
+    '---\nname: test-skill\ndescription: Use when testing things\n---\n# Test Skill\n\nContent here.');
+
+  test('valid Claude Code skill dir → valid: true', () => {
+    const result = validateSkillDir(claudeSkillDir);
+    assertTrue(result.valid, `Expected valid, got: ${JSON.stringify(result)}`);
+  });
+
+  test('validateSkillDir result has info array', () => {
+    const result = validateSkillDir(claudeSkillDir);
+    assertTrue(Array.isArray(result.info), 'info should be array');
+  });
+
+  // Docker Agent skill with description NOT starting "Use when..."
+  const dockerSkillDir = path.join(tmpDir, 'docker-skill');
+  fs.mkdirSync(dockerSkillDir);
+  fs.writeFileSync(path.join(dockerSkillDir, 'SKILL.md'),
+    '---\nname: create-dockerfile\ndescription: Create optimized Dockerfiles for applications\ncontext: fork\n---\n# Create Dockerfile\n\nContent here.');
+
+  console.log('\nvalidateSkillDir — Docker Agent source path:');
+
+  test('Docker Agent source: "Use when" warning demoted to info', () => {
+    const result = validateSkillDir(dockerSkillDir, {
+      sourcePath: '/home/user/.agents/skills/create-dockerfile',
+    });
+    // Should have no warning about "Use when"
+    const useWhenWarning = result.warnings.some(w => w.includes('Use when'));
+    assertFalse(useWhenWarning, `Expected no "Use when" warning for Docker Agent source, got warnings: ${JSON.stringify(result.warnings)}`);
+    // Should have info entry about "Use when"
+    const useWhenInfo = result.info.some(m => m.includes('Use when'));
+    assertTrue(useWhenInfo, `Expected info about "Use when" for Docker Agent source, got info: ${JSON.stringify(result.info)}`);
+  });
+
+  test('Docker Agent source: context field noted in info', () => {
+    const result = validateSkillDir(dockerSkillDir, {
+      sourcePath: '/home/user/.agents/skills/create-dockerfile',
+    });
+    const contextInfo = result.info.some(m => m.includes('context'));
+    assertTrue(contextInfo, `Expected info about context field, got: ${JSON.stringify(result.info)}`);
+  });
+
+  test('Docker Agent source via dir path (no sourcePath): detected from dirPath', () => {
+    const agentsDir = path.join(tmpDir, '.agents', 'skills', 'create-dockerfile');
+    fs.mkdirSync(agentsDir, { recursive: true });
+    fs.writeFileSync(path.join(agentsDir, 'SKILL.md'),
+      '---\nname: create-dockerfile\ndescription: Create optimized Dockerfiles\n---\n# Content');
+    const result = validateSkillDir(agentsDir); // no sourcePath
+    // description doesn't start "Use when" — should go to info not warning
+    const useWhenWarning = result.warnings.some(w => w.includes('Use when'));
+    assertFalse(useWhenWarning, `Expected no "Use when" warning when dirPath is Docker Agent path, got: ${JSON.stringify(result.warnings)}`);
+  });
+
+  console.log('\nvalidateSkillDir — missing SKILL.md:');
+
+  test('dir without SKILL.md → valid: false with error', () => {
+    const emptyDir = path.join(tmpDir, 'empty');
+    fs.mkdirSync(emptyDir);
+    const result = validateSkillDir(emptyDir);
+    assertFalse(result.valid, 'Expected invalid');
+    assertTrue(result.errors.length > 0, 'Expected errors');
+  });
+} finally {
+  // Always clean up temp dir, even if tests throw
+  try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+}
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
 

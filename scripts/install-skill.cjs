@@ -9,9 +9,12 @@
  * Exports:
  *   detectInputType(input) → { type: string, url?: string, branch?: string }
  *   validateSkill(content) → { valid: boolean, warnings: string[], errors: string[], name?: string, description?: string }
+ *   isDockerAgentPath(p) → boolean
+ *   validateSkillDir(dirPath, options?) → { valid: boolean, warnings: string[], errors: string[], info: string[], name?: string, description?: string }
  *
  * CLI usage:
  *   node install-skill.cjs <input> [--target <dir>] [--branch <b>] [--scope user|project]
+ *   node install-skill.cjs validateSkill <dir> [--source-path <original-path>]
  *
  * Types returned by detectInputType:
  *   'local-file'   — local .md file path
@@ -259,19 +262,121 @@ function validateSkill(content) {
   return result;
 }
 
+// ─── isDockerAgentPath ────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the given path looks like a Docker Agent skills location.
+ * Matches paths containing `.agents/skills` (project or user-global).
+ *
+ * @param {string} p - File or directory path to test
+ * @returns {boolean}
+ */
+function isDockerAgentPath(p) {
+  if (typeof p !== 'string' || !p) return false;
+  // Normalise: replace backslashes for cross-platform safety
+  const normalised = p.replace(/\\/g, '/');
+  return normalised.includes('.agents/skills');
+}
+
+// ─── validateSkillDir ─────────────────────────────────────────────────────────
+
+/**
+ * Validates the SKILL.md found inside `dirPath`, applying Docker Agent–aware
+ * rules when the skill originates from a `.agents/skills/` path.
+ *
+ * The "description must start with 'Use when...'" check is:
+ *   - Warning   — for Claude Code sources (default)
+ *   - Info      — for Docker Agent sources (`.agents/skills/` paths)
+ *
+ * Docker Agent–specific frontmatter fields (`context`, `allowed-tools`,
+ * `license`, `compatibility`, `metadata`) are reported as Info rather than
+ * warnings when the source path is a Docker Agent location.
+ *
+ * @param {string} dirPath - Directory that should contain a SKILL.md file
+ * @param {{ sourcePath?: string }} [options]
+ *   sourcePath — the original source path used to detect Docker Agent origin.
+ *                Falls back to dirPath if not provided.
+ * @returns {{ valid: boolean, warnings: string[], errors: string[], info: string[], name?: string, description?: string }}
+ */
+function validateSkillDir(dirPath, options) {
+  const { sourcePath } = options || {};
+  const info = [];
+
+  // Read SKILL.md from the directory
+  const skillFile = path.join(dirPath, 'SKILL.md');
+  let content;
+  try {
+    content = fs.readFileSync(skillFile, 'utf8');
+  } catch (err) {
+    return {
+      valid: false,
+      warnings: [],
+      errors: [`SKILL.md not found in ${dirPath}: ${err.message}`],
+      info,
+    };
+  }
+
+  // Detect whether this is a Docker Agent source
+  const effectivePath = sourcePath || dirPath;
+  const isDockerAgent = isDockerAgentPath(effectivePath);
+
+  // Run base validation
+  const base = validateSkill(content);
+
+  let { warnings, errors } = base;
+
+  if (isDockerAgent) {
+    // Demote "Use when..." description warning to Info for Docker Agent sources
+    const useWhenWarnings = warnings.filter(w => w.includes('Use when'));
+    const remainingWarnings = warnings.filter(w => !w.includes('Use when'));
+    if (useWhenWarnings.length > 0) {
+      info.push(...useWhenWarnings.map(w => `[docker-agent] ${w}`));
+      warnings = remainingWarnings;
+    }
+
+    // Note Docker Agent–specific extra fields as Info
+    const parsed = parseFrontmatterBlock(content);
+    if (parsed) {
+      const fields = parseSimpleYaml(parsed.frontmatter);
+      const dockerAgentFields = ['context', 'allowed-tools', 'license', 'compatibility', 'metadata'];
+      for (const field of dockerAgentFields) {
+        if (fields[field] !== undefined) {
+          info.push(`[docker-agent] Extra field preserved: ${field}=${fields[field]}`);
+        }
+      }
+    }
+  }
+
+  // `valid` mirrors validateSkill's strict definition: true only when there are
+  // no errors AND no warnings. After Docker Agent demotion, "Use when" warnings
+  // are moved to `info`, so Docker Agent skills without other issues report valid:true.
+  const valid = errors.length === 0 && warnings.length === 0;
+  const result = { valid, warnings, errors, info };
+  if (base.name !== undefined) result.name = base.name;
+  if (base.description !== undefined) result.description = base.description;
+
+  return result;
+}
+
 // ─── CLI entry point ──────────────────────────────────────────────────────────
 
 /**
  * Parse CLI arguments.
  * @param {string[]} argv
- * @returns {{ input: string|null, target: string, branch: string|null, scope: string }}
+ * @returns {{ subcommand: string|null, input: string|null, target: string, branch: string|null, scope: string, sourcePath: string|null }}
  */
 function parseArgs(argv) {
   const args = argv.slice(2);
+  let subcommand = null;
   let input = null;
   let target = path.join(os.homedir(), '.claude', 'skills');
   let branch = null;
   let scope = 'user';
+  let sourcePath = null;
+
+  // Check for known subcommand as first positional arg
+  const knownSubcommands = ['validateSkill'];
+  let positionalCount = 0;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -281,19 +386,59 @@ function parseArgs(argv) {
       branch = args[++i];
     } else if (arg === '--scope') {
       scope = args[++i];
+    } else if (arg === '--source-path') {
+      sourcePath = args[++i];
     } else if (!arg.startsWith('--')) {
-      input = arg;
+      if (positionalCount === 0 && knownSubcommands.includes(arg)) {
+        subcommand = arg;
+      } else {
+        input = arg;
+      }
+      positionalCount++;
     }
   }
 
-  return { input, target, branch, scope };
+  return { subcommand, input, target, branch, scope, sourcePath };
 }
 
 if (require.main === module) {
-  const { input, target, branch, scope } = parseArgs(process.argv);
+  const { subcommand, input, target, branch, scope, sourcePath } = parseArgs(process.argv);
 
+  // ── validateSkill subcommand ────────────────────────────────────────────────
+  if (subcommand === 'validateSkill') {
+    if (!input) {
+      console.error('Usage: node install-skill.cjs validateSkill <dir> [--source-path <original-path>]');
+      console.error('');
+      console.error('  <dir>               Directory containing a SKILL.md file to validate');
+      console.error('  --source-path <p>   Original source path (used for Docker Agent detection)');
+      process.exit(1);
+    }
+
+    const result = validateSkillDir(input, { sourcePath });
+
+    if (result.errors.length > 0) {
+      console.error('Errors:');
+      result.errors.forEach(e => console.error(`  ✗ ${e}`));
+    }
+    if (result.warnings.length > 0) {
+      console.warn('Warnings:');
+      result.warnings.forEach(w => console.warn(`  ⚠ ${w}`));
+    }
+    if (result.info.length > 0) {
+      console.log('Info:');
+      result.info.forEach(m => console.log(`  ℹ ${m}`));
+    }
+    if (result.errors.length === 0 && result.warnings.length === 0) {
+      console.log(`✓ Valid skill${result.name ? `: ${result.name}` : ''}`);
+    }
+
+    process.exit(result.errors.length > 0 ? 1 : 0);
+  }
+
+  // ── Default: input type detection ──────────────────────────────────────────
   if (!input) {
     console.error('Usage: node install-skill.cjs <input> [--target <dir>] [--branch <b>] [--scope user|project]');
+    console.error('       node install-skill.cjs validateSkill <dir> [--source-path <original-path>]');
     console.error('');
     console.error('Input can be:');
     console.error('  /path/to/SKILL.md           — local file');
@@ -322,6 +467,8 @@ if (require.main === module) {
 module.exports = {
   detectInputType,
   validateSkill,
+  isDockerAgentPath,
+  validateSkillDir,
   parseFrontmatterBlock,
   parseSimpleYaml,
   parseArgs,

@@ -1,10 +1,12 @@
 # Scope Guide: Skill Location and Promotion
 
-Reference for `skills-guru` scope operations. Covers hierarchy, discovery, operations, conflict handling, and monorepo patterns.
+Reference for `skills-guru` scope operations. Covers hierarchy, discovery, operations, conflict handling, and monorepo patterns. For Docker Agent–specific paths and cross-agent operations, see `references/docker-agent-guide.md`.
 
 ---
 
 ## Scope Hierarchy
+
+### Claude Code scopes
 
 ```
 ~/.claude/skills/                          ← Level 0: User-global (available in all projects)
@@ -13,7 +15,22 @@ Reference for `skills-guru` scope operations. Covers hierarchy, discovery, opera
 <repo>/packages/api/.claude/skills/        ← Level 2+: Monorepo package scoped
 ```
 
-**Shadowing rule:** A skill at a lower (deeper) level shadows a same-named skill at a higher level. The deepest match wins at load time.
+### Docker Agent scopes (see docker-agent-guide.md for full details)
+
+```
+~/.codex/skills/                           ← User-global codex (recursive scan, lowest precedence)
+~/.claude/skills/                          ← Shared: flat-scanned by both Claude Code and Docker Agent
+~/.agents/skills/                          ← User-global (recursive scan, highest global precedence)
+<cwd>/.claude/skills/                      ← Shared: cwd-level Claude Code and Docker Agent (flat, cwd only)
+<each-dir-from-root-to-cwd>/.agents/skills/ ← Project-level Docker Agent (flat per dir; closer to cwd wins)
+```
+
+**Precedence rules**
+
+- **Claude Code scopes:** A skill closer to the current working directory (further from the repo root) shadows a same-named skill further away. The deepest matching path within the Claude Code hierarchy wins at load time.
+- **Docker Agent scopes:** Precedence is path/type-based rather than purely depth-based:
+  - Global precedence (lowest → highest): `~/.codex/skills/` → `~/.claude/skills/` → `~/.agents/skills/`.
+  - Project-level precedence: `<cwd>/.claude/skills/` is considered after the global directories; for `<each-dir-from-root-to-cwd>/.agents/skills/`, when skills share the same name, the directory closest to the current working directory wins.
 
 ---
 

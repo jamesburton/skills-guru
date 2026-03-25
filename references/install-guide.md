@@ -38,12 +38,17 @@ Returns a type token: `local-md`, `local-dir`, `local-archive`, `github-repo`,
 
 ### Step 3: Validate Skill Structure
 ```
-node scripts/install-skill.cjs validateSkill <temp-dir>
+node scripts/install-skill.cjs validateSkill <temp-dir> [--source-path <original-path>]
 ```
 Checks:
-- `SKILL.md` present
+- `SKILL.md` present in `<temp-dir>`
 - Frontmatter block exists (`---` delimiters)
-- Required keys present: `name`, `description`, `version`
+- Required keys present: `name`, `description`
+- `version` is not required in SKILL.md frontmatter — skills-guru records install version in `memory/sources.md`. Docker Agent skills may store a display version in `metadata.version` (preserved as-is; not validated)
+
+The optional `--source-path` flag passes the original source location (e.g. `~/.agents/skills/foo`) for Docker Agent detection. When the source path contains `.agents/skills`, the validator applies relaxed rules (see below).
+
+**Docker Agent skills** (sourced from `.agents/skills/` or `~/.agents/skills/`) are detected automatically — either via `--source-path` or by detecting the pattern in `<temp-dir>` itself. Docker Agent–specific frontmatter fields (`context`, `allowed-tools`, `license`, `compatibility`, `metadata`) are reported as Info rather than warnings. See `references/docker-agent-guide.md` for validation rules specific to Docker Agent format.
 
 ### Step 4: Security Scan
 
@@ -114,10 +119,11 @@ Run automatically after copy. Issues displayed with suggested fixes.
 |-------|------|----------|
 | Frontmatter parses | Valid YAML between `---` delimiters | Error |
 | Name format | Kebab-case only: `[a-z0-9-]+` | Warning |
-| Description prefix | Starts with "Use when..." | Warning |
+| Description prefix | Starts with "Use when..." | Warning (Claude Code only; demoted to Info for Docker Agent sources) |
 | File length | Under 500 lines | Warning (not blocking) |
 | Reference depth | No nested `references/` deeper than 1 level | Warning |
 | No @-file loads | No lines matching `@<path>` pattern | Error |
+| Docker Agent extra fields | `context`, `allowed-tools`, `license`, `compatibility`, `metadata` | Info (noted, not flagged as errors) |
 
 For warnings, offer auto-fix:
 ```
@@ -125,6 +131,8 @@ Auto-fix available for: name format, description prefix.
 Apply fixes? (y/N)
 ```
 Auto-fix rewrites frontmatter in-place. Backs up original as `SKILL.md.bak`.
+
+**Docker Agent source detection:** If the skill originates from a `.agents/skills/` or `~/.agents/skills/` path, the "description prefix" check is demoted from Warning to Info. The `context: fork` and `allowed-tools` fields are preserved during install without modification.
 
 ---
 
