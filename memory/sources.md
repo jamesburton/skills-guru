@@ -15,3 +15,16 @@
 -->
 
 <!-- Add sources below as repos are registered -->
+
+### claude-skills-toolkit
+- URL: https://github.com/full-stack-biz/claude-skills-toolkit
+- Branch: main
+- Last sync: 2026-07-02
+- Skills: [skill-refiner]
+- Fork of: N/A
+
+#### skill-refiner (per-skill tracking)
+- Installed: 2026-07-02 from main.zip archive (commit sha not captured — GitHub archive download, no git metadata)
+- Local status: clean
+- Remote status: unchanged
+- Scope: project (c:\Development\FNZ\QHubPackages\.claude\skills\)
